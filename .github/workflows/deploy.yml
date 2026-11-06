@@ -1,0 +1,80 @@
+name: Сборка и публикация
+
+# Автоматически собирает приложение и публикует его на GitHub Pages.
+# Дополнительно формирует архив готового сайта (artifact «fizium-static-site»),
+# который можно скачать и загрузить на любой хостинг (например, reg.ru).
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить код
+        uses: actions/checkout@v4
+
+      - name: Установить Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Установить зависимости
+        run: bun install
+
+      # Сборка для GitHub Pages: адрес сайта зависит от имени репозитория.
+      # Для репозитория «логин.github.io» сайт в корне, для остальных — в подпапке /имя-репозитория.
+      - name: Вычислить basePath
+        id: bp
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          if [[ "$REPO_NAME" == *.github.io ]]; then
+            echo "path=" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=/$REPO_NAME" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Если к GitHub Pages привязан свой домен, сайт открывается в корне адреса —
+      # замените значение ниже на NEXT_PUBLIC_BASE_PATH: ''
+      - name: Собрать сайт для GitHub Pages
+        run: bun run build
+        env:
+          NEXT_PUBLIC_BASE_PATH: ${{ steps.bp.outputs.path }}
+
+      - name: Подготовить артефакт Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+      # Отдельная сборка «для корня домена» — из неё формируется архив,
+      # который заливается на reg.ru или другой хостинг без изменений.
+      - name: Собрать сайт для корня домена
+        run: rm -rf out .next && bun run build
+
+      - name: Загрузить готовый сайт (архив)
+        uses: actions/upload-artifact@v4
+        with:
+          name: fizium-static-site
+          path: out
+          retention-days: 90
+          if-no-files-found: error
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Опубликовать на GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

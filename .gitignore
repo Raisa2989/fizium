@@ -1,0 +1,16 @@
+# локальные инструменты среды
+skills/
+
+# зависимости
+node_modules/
+
+# сборка Next.js
+.next/
+out/
+
+# локальные файлы
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
